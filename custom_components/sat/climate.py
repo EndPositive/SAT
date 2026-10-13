@@ -113,6 +113,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._setpoint = None
         self._calculated_setpoint = None
         self._last_boiler_temperature = None
+        self._last_outside_temperature = None
 
         self._hvac_mode = None
         self._target_temperature = None
@@ -205,6 +206,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         # Initialize the area system
         await self.areas.async_added_to_hass(self.hass)
+        await self.minimum_setpoint.async_initialize(self.hass)
 
         # Update a heating curve if outside temperature is available
         if self.current_outside_temperature is not None:
@@ -392,6 +394,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             "current_kd": self.pid.kd,
 
             "rooms": self._rooms,
+            "requested_setpoints": self.areas.requested_setpoints,
             "setpoint": self._setpoint,
             "current_humidity": self.current_humidity,
 
@@ -460,12 +463,14 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 continue
 
             if sensor.DOMAIN in entity_id:
-                return float(state.state)
+                self._last_outside_temperature = float(state.state)
+                return self._last_outside_temperature
 
             if weather.DOMAIN in entity_id:
-                return float(state.attributes.get("temperature"))
+                self._last_outside_temperature = float(state.attributes.get("temperature"))
+                return self._last_outside_temperature
 
-        return None
+        return self._last_outside_temperature
 
     @property
     def target_temperature_step(self):

@@ -114,13 +114,18 @@ class Areas:
         return Errors([area.error for area in self._areas if area.error is not None])
 
     @property
-    def requested_setpoint(self) -> float | None:
-        """Return the highest setpoint requested by any active area."""
-        return max((
-            area.heating_curve.value + area.pid.output
+    def requested_setpoints(self) -> dict[str, float]:
+        """Return the setpoint requested by each active area."""
+        return {
+            area.id: round(area.heating_curve.value + area.pid.output, 1)
             for area in self._areas
             if area.error is not None and area.heating_curve.value is not None
-        ), default=None)
+        }
+
+    @property
+    def requested_setpoint(self) -> float | None:
+        """Return the highest setpoint requested by any active area."""
+        return max(self.requested_setpoints.values(), default=None)
 
     @property
     def heating_curves(self):

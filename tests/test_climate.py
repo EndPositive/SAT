@@ -9,6 +9,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.sat.climate import SatClimate
 from custom_components.sat.const import *
+from custom_components.sat.const import PWMStatus
 from custom_components.sat.fake import SatFakeCoordinator
 
 
@@ -197,6 +198,19 @@ async def test_valves_mode(hass: HomeAssistant, entry: MockConfigEntry, climate:
     assert climate.heating_curve.value == 23.2
     assert climate.max_error.entity_id == "climate.room_1"
     assert climate.requested_setpoint == 44.4
+    assert climate.extra_state_attributes["requested_setpoints"] == {"climate.room_1": 44.4, "climate.room_2": 16.8}
+    assert climate.minimum_setpoint._store is not None
+
+    climate.pwm._current_cycle = 3
+    climate.pwm.reset()
+    assert climate.pwm._current_cycle == 3
+
+    await coordinator.async_set_boiler_temperature(40)
+    await climate.pwm.update(boiler=coordinator.boiler, flame=coordinator.flame, requested_setpoint=40)
+    climate.pwm._current_cycle = 4
+    climate.pwm.reset()
+    await climate.pwm.update(boiler=coordinator.boiler, flame=coordinator.flame, requested_setpoint=40)
+    assert climate.pwm.status == PWMStatus.OFF
 
     climate.areas.pids.reset()
     climate.heating_curve.reset()
@@ -214,6 +228,9 @@ async def test_valves_mode(hass: HomeAssistant, entry: MockConfigEntry, climate:
     hass.states.async_set("climate.room_2", HVACMode.HEAT, {"temperature": 18.0, "current_temperature": 17.5, "hvac_action": "heating", "hvac_modes": [HVACMode.OFF, HVACMode.HEAT]})
     await hass.async_block_till_done()
     assert room_1.pid.last_updated == last_updated
+
+    hass.states.async_set("sensor.test_outside_sensor", "unavailable")
+    assert climate.current_outside_temperature == 9.9
 
     hass.states.async_set("climate.room_1", HVACMode.OFF, {"current_temperature": 19.3})
     hass.states.async_set("climate.room_2", HVACMode.OFF, {"current_temperature": 17.5})
