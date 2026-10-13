@@ -488,8 +488,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
     @property
     def errors(self) -> Errors:
-        if self._heating_mode == HEATING_MODE_VALVES and (errors := self.areas.errors):
-            return errors
+        if self._heating_mode == HEATING_MODE_VALVES:
+            return self.areas.errors
 
         errors = Errors([Error(self.entity_id, self.error)])
         if self._heating_mode == HEATING_MODE_ECO:
@@ -499,7 +499,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
     @property
     def max_error(self) -> Error:
-        return max(self.errors, key=lambda error: error.value)
+        return self.errors.max() or Error(self.entity_id, 0.0)
 
     @property
     def setpoint(self) -> float | None:
@@ -508,8 +508,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
     @property
     def requested_setpoint(self) -> float:
         """Get the requested setpoint based on the heating curve and PID output."""
-        if self._heating_mode == HEATING_MODE_VALVES and (requested_setpoint := self.areas.requested_setpoint) is not None:
-            return round(max(requested_setpoint, MINIMUM_SETPOINT), 1)
+        if self._heating_mode == HEATING_MODE_VALVES:
+            requested_setpoint = self.areas.requested_setpoint
+            return MINIMUM_SETPOINT if requested_setpoint is None else round(max(requested_setpoint, MINIMUM_SETPOINT), 1)
 
         if self.heating_curve.value is None:
             return MINIMUM_SETPOINT
@@ -936,7 +937,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._control_heating_loop_unsub = None
 
         # If the current, target or outside temperature is not available, do nothing
-        if self.current_temperature is None or self.target_temperature is None or self.current_outside_temperature is None:
+        if (self.current_temperature is None and self._heating_mode != HEATING_MODE_VALVES) or self.target_temperature is None or self.current_outside_temperature is None:
             return
 
         # No need to do anything if we are not on

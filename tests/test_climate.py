@@ -197,7 +197,8 @@ async def test_valves_mode(hass: HomeAssistant, entry: MockConfigEntry, climate:
 
     hass.states.async_set("climate.room_1", HVACMode.OFF, {"current_temperature": 19.3})
     hass.states.async_set("climate.room_2", HVACMode.OFF, {"current_temperature": 17.5})
+    await climate.async_set_target_temperature(22.0)
     await hass.async_block_till_done()
 
-    assert climate.max_error.entity_id == climate.entity_id
+    assert climate.max_error.value == 0
     assert climate.requested_setpoint == MINIMUM_SETPOINT
