@@ -947,6 +947,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         # Control the heating through the coordinator
         await self._coordinator.async_control_heating_loop(climate=self, pwm_state=self.pwm.state)
 
+        self.areas.heating_curves.update(self.current_outside_temperature)
+        if self._coordinator.boiler_temperature_filtered is not None:
+            self.areas.pids.update(self._coordinator.boiler_temperature_filtered)
+
         if self._calculated_setpoint is None:
             # Default to the calculated setpoint
             self._calculated_setpoint = self._calculate_control_setpoint()

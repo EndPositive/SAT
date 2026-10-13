@@ -185,14 +185,23 @@ async def test_scenario_3(hass: HomeAssistant, entry: MockConfigEntry, climate: 
             },
     )],
 ])
-async def test_valves_mode(hass: HomeAssistant, entry: MockConfigEntry, climate: SatClimate, coordinator: SatFakeCoordinator) -> None:
-    hass.states.async_set("climate.room_1", HVACMode.HEAT, {"temperature": 20.0, "current_temperature": 19.3, "hvac_action": "heating"})
-    hass.states.async_set("climate.room_2", HVACMode.HEAT, {"temperature": 17.0, "current_temperature": 17.5, "hvac_action": "idle"})
+async def test_valves_mode(hass: HomeAssistant, entry: MockConfigEntry, climate: SatClimate, coordinator: SatFakeCoordinator, freezer) -> None:
+    hass.states.async_set("climate.room_1", HVACMode.HEAT, {"temperature": 20.0, "current_temperature": 19.3, "hvac_action": "heating", "hvac_modes": [HVACMode.OFF, HVACMode.HEAT]})
+    hass.states.async_set("climate.room_2", HVACMode.HEAT, {"temperature": 17.0, "current_temperature": 17.5, "hvac_action": "idle", "hvac_modes": [HVACMode.OFF, HVACMode.HEAT]})
     await climate.async_set_target_temperature(16.0)
+    await climate.async_set_hvac_mode(HVACMode.HEAT)
     await hass.async_block_till_done()
 
     assert climate.heating_curve.value == 23.2
     assert climate.max_error.entity_id == "climate.room_1"
+    assert climate.requested_setpoint == 44.4
+
+    climate.areas.pids.reset()
+    assert climate.requested_setpoint == 30.4
+
+    freezer.tick(61)
+    await coordinator.async_set_boiler_temperature(40)
+    await climate.async_control_heating_loop()
     assert climate.requested_setpoint == 44.4
 
     hass.states.async_set("climate.room_1", HVACMode.OFF, {"current_temperature": 19.3})
