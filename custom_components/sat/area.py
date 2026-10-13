@@ -167,7 +167,7 @@ class Areas:
 
         def update_reset(self) -> None:
             for area in self.areas:
-                if area.error is not None:
+                if area.error is not None and area.error.value != area.pid.last_error:
                     area.pid.update_reset(area.error, area.heating_curve.value)
 
         def reset(self) -> None:

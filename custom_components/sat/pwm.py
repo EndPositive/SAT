@@ -100,7 +100,7 @@ class PWM:
 
     async def update(self, boiler: "BoilerState", flame: "FlameState", requested_setpoint: float) -> None:
         """Update the PWM state based on the output of a PID controller."""
-        if not self._heating_curve.value or requested_setpoint is None or boiler.flow_temperature is None:
+        if self._heating_curve.value is None or requested_setpoint is None or boiler.flow_temperature is None:
             self._status = PWMStatus.IDLE
             self._last_update = monotonic()
             self._last_boiler_temperature = boiler.flow_temperature

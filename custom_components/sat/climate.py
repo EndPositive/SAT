@@ -153,6 +153,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         # User Configuration
         self._heating_mode = str(config_entry.options.get(CONF_HEATING_MODE))
+        if self._heating_mode == HEATING_MODE_VALVES:
+            self._attr_supported_features &= ~(ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE)
         self._thermal_comfort = bool(config_options.get(CONF_THERMAL_COMFORT))
         self._climate_valve_offset = float(config_options.get(CONF_CLIMATE_VALVE_OFFSET))
         self._target_temperature_step = float(config_options.get(CONF_TARGET_TEMPERATURE_STEP))
@@ -416,6 +418,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
     @property
     def current_temperature(self) -> Optional[float]:
         """Return the sensor temperature."""
+        if self._heating_mode == HEATING_MODE_VALVES:
+            return None
+
         if (current_temperature := self._get_entity_state_float(self.inside_sensor_entity_id)) is None:
             return None
 
@@ -947,6 +952,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         # Control the heating through the coordinator
         await self._coordinator.async_control_heating_loop(climate=self, pwm_state=self.pwm.state)
 
+        self.heating_curve.update(self.target_temperature, self.current_outside_temperature)
         self.areas.heating_curves.update(self.current_outside_temperature)
         if self._coordinator.boiler_temperature_filtered is not None:
             self.areas.pids.update(self._coordinator.boiler_temperature_filtered)

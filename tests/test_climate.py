@@ -1,7 +1,7 @@
 """The tests for the climate component."""
 
 import pytest
-from homeassistant.components.climate import HVACMode
+from homeassistant.components.climate import ClimateEntityFeature, HVACMode
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from homeassistant.core import HomeAssistant
@@ -192,17 +192,28 @@ async def test_valves_mode(hass: HomeAssistant, entry: MockConfigEntry, climate:
     await climate.async_set_hvac_mode(HVACMode.HEAT)
     await hass.async_block_till_done()
 
+    assert not climate.supported_features & (ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE)
+    assert climate.current_temperature is None
     assert climate.heating_curve.value == 23.2
     assert climate.max_error.entity_id == "climate.room_1"
     assert climate.requested_setpoint == 44.4
 
     climate.areas.pids.reset()
+    climate.heating_curve.reset()
     assert climate.requested_setpoint == 30.4
 
     freezer.tick(61)
     await coordinator.async_set_boiler_temperature(40)
     await climate.async_control_heating_loop()
+    assert climate.heating_curve.value == 23.2
     assert climate.requested_setpoint == 44.4
+
+    room_1 = climate.areas._areas[0]
+    last_updated = room_1.pid.last_updated
+    freezer.tick(1)
+    hass.states.async_set("climate.room_2", HVACMode.HEAT, {"temperature": 18.0, "current_temperature": 17.5, "hvac_action": "heating", "hvac_modes": [HVACMode.OFF, HVACMode.HEAT]})
+    await hass.async_block_till_done()
+    assert room_1.pid.last_updated == last_updated
 
     hass.states.async_set("climate.room_1", HVACMode.OFF, {"current_temperature": 19.3})
     hass.states.async_set("climate.room_2", HVACMode.OFF, {"current_temperature": 17.5})
