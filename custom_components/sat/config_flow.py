@@ -595,6 +595,7 @@ class SatOptionsFlowHandler(config_entries.OptionsFlow):
                 selector.SelectSelectorConfig(mode=SelectSelectorMode.DROPDOWN, options=[
                     selector.SelectOptionDict(value=HEATING_MODE_COMFORT, label="Comfort"),
                     selector.SelectOptionDict(value=HEATING_MODE_ECO, label="Eco"),
+                    selector.SelectOptionDict(value=HEATING_MODE_VALVES, label="Valves"),
                 ])
             )
 

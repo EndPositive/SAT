@@ -201,6 +201,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         # Restore the previous state if available, or set default values
         await self._restore_previous_state_or_set_defaults()
 
+        # Initialize the area system
+        await self.areas.async_added_to_hass(self.hass)
+
         # Update a heating curve if outside temperature is available
         if self.current_outside_temperature is not None:
             self.areas.heating_curves.update(self.current_outside_temperature)
@@ -215,9 +218,6 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         # Register services
         await self._register_services()
-
-        # Initialize the area system
-        await self.areas.async_added_to_hass(self.hass)
 
         # Let the coordinator know we are ready
         await self._coordinator.async_added_to_hass()
@@ -488,6 +488,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
     @property
     def errors(self) -> Errors:
+        if self._heating_mode == HEATING_MODE_VALVES and (errors := self.areas.errors):
+            return errors
+
         errors = Errors([Error(self.entity_id, self.error)])
         if self._heating_mode == HEATING_MODE_ECO:
             return errors
@@ -505,6 +508,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
     @property
     def requested_setpoint(self) -> float:
         """Get the requested setpoint based on the heating curve and PID output."""
+        if self._heating_mode == HEATING_MODE_VALVES and (requested_setpoint := self.areas.requested_setpoint) is not None:
+            return round(max(requested_setpoint, MINIMUM_SETPOINT), 1)
+
         if self.heating_curve.value is None:
             return MINIMUM_SETPOINT
 
@@ -771,6 +777,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         if self.target_temperature is not None:
             self.areas.heating_curves.update(self.current_outside_temperature)
             self.heating_curve.update(self.target_temperature, self.current_outside_temperature)
+
+        if reset:
+            self.areas.pids.update_reset()
 
         # Update the PID controller with the maximum error
         if not reset:

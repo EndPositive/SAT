@@ -114,6 +114,15 @@ class Areas:
         return Errors([area.error for area in self._areas if area.error is not None])
 
     @property
+    def requested_setpoint(self) -> float | None:
+        """Return the highest setpoint requested by any active area."""
+        return max((
+            area.heating_curve.value + area.pid.output
+            for area in self._areas
+            if area.error is not None and area.heating_curve.value is not None
+        ), default=None)
+
+    @property
     def heating_curves(self):
         """Return an interface to update heating curves for all areas."""
         return Areas._HeatingCurves(self._areas)
@@ -155,6 +164,11 @@ class Areas:
             for area in self.areas:
                 if area.error is not None:
                     area.pid.update(area.error, area.heating_curve.value, boiler_temperature)
+
+        def update_reset(self) -> None:
+            for area in self.areas:
+                if area.error is not None:
+                    area.pid.update_reset(area.error, area.heating_curve.value)
 
         def reset(self) -> None:
             """Reset PID controllers for all areas."""

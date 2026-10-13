@@ -150,3 +150,54 @@ async def test_scenario_3(hass: HomeAssistant, entry: MockConfigEntry, climate: 
     assert climate.pulse_width_modulation_enabled
     assert climate.pwm.last_duty_cycle_percentage == 53.62
     assert climate.pwm.duty_cycle == (643, 556)
+
+
+@pytest.mark.parametrize(*[
+    "domains, data, options, config",
+    [(
+            [(TEMPLATE_DOMAIN, 1)],
+            {
+                CONF_MODE: MODE_FAKE,
+                CONF_HEATING_SYSTEM: HEATING_SYSTEM_RADIATORS,
+                CONF_MINIMUM_SETPOINT: 57,
+                CONF_MAXIMUM_SETPOINT: 75,
+                CONF_ROOMS: ["climate.room_1", "climate.room_2"],
+            },
+            {
+                CONF_HEATING_CURVE_COEFFICIENT: 1.8,
+                CONF_HEATING_MODE: HEATING_MODE_VALVES,
+            },
+            {
+                TEMPLATE_DOMAIN: [
+                    {
+                        SENSOR_DOMAIN: [
+                            {
+                                "name": "test_inside_sensor",
+                                "state": "{{ 20.9 | float }}",
+                            },
+                            {
+                                "name": "test_outside_sensor",
+                                "state": "{{ 9.9 | float }}",
+                            }
+                        ]
+                    },
+                ],
+            },
+    )],
+])
+async def test_valves_mode(hass: HomeAssistant, entry: MockConfigEntry, climate: SatClimate, coordinator: SatFakeCoordinator) -> None:
+    hass.states.async_set("climate.room_1", HVACMode.HEAT, {"temperature": 20.0, "current_temperature": 19.3, "hvac_action": "heating"})
+    hass.states.async_set("climate.room_2", HVACMode.HEAT, {"temperature": 17.0, "current_temperature": 17.5, "hvac_action": "idle"})
+    await climate.async_set_target_temperature(16.0)
+    await hass.async_block_till_done()
+
+    assert climate.heating_curve.value == 23.2
+    assert climate.max_error.entity_id == "climate.room_1"
+    assert climate.requested_setpoint == 44.4
+
+    hass.states.async_set("climate.room_1", HVACMode.OFF, {"current_temperature": 19.3})
+    hass.states.async_set("climate.room_2", HVACMode.OFF, {"current_temperature": 17.5})
+    await hass.async_block_till_done()
+
+    assert climate.max_error.entity_id == climate.entity_id
+    assert climate.requested_setpoint == MINIMUM_SETPOINT
