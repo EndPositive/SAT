@@ -1,7 +1,8 @@
+from time import monotonic
 from types import MappingProxyType
 from typing import Any
 
-from homeassistant.components.climate import HVACMode
+from homeassistant.components.climate import HVACAction, HVACMode
 from homeassistant.const import STATE_UNKNOWN, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant, State
 
@@ -16,12 +17,14 @@ from .util import (
 )
 
 SENSOR_TEMPERATURE_ID = "sensor_temperature_id"
+VALVE_OPEN_DELAY = 60
 
 
 class Area:
     def __init__(self, config_data: MappingProxyType[str, Any], config_options: MappingProxyType[str, Any], entity_id: str):
         self._entity_id: str = entity_id
         self._hass: HomeAssistant | None = None
+        self._heating_since: float | None = None
 
         # Create controllers with the given configuration options
         self.pid: PID = create_pid_controller(config_options)
@@ -38,6 +41,17 @@ class Area:
             return None
 
         return state if state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE] else None
+
+    @property
+    def valve_open(self) -> bool:
+        if (state := self.state) is None or state.attributes.get("hvac_action") != HVACAction.HEATING:
+            self._heating_since = None
+            return False
+
+        if self._heating_since is None:
+            self._heating_since = monotonic()
+
+        return monotonic() - self._heating_since >= VALVE_OPEN_DELAY
 
     @property
     def target_temperature(self) -> float | None:
@@ -124,8 +138,13 @@ class Areas:
 
     @property
     def requested_setpoint(self) -> float | None:
-        """Return the highest setpoint requested by any active area."""
-        return max(self.requested_setpoints.values(), default=None)
+        """Return the highest setpoint requested by any area with an open valve."""
+        open_ids = {area.id for area in self._areas if area.valve_open}
+        return max((setpoint for area_id, setpoint in self.requested_setpoints.items() if area_id in open_ids), default=None)
+
+    @property
+    def valves_open(self) -> bool:
+        return any(area.valve_open for area in self._areas)
 
     @property
     def heating_curves(self):

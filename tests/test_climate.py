@@ -197,7 +197,12 @@ async def test_valves_mode(hass: HomeAssistant, entry: MockConfigEntry, climate:
     assert climate.current_temperature is None
     assert climate.heating_curve.value == 23.2
     assert climate.max_error.entity_id == "climate.room_1"
+    assert climate.requested_setpoint == MINIMUM_SETPOINT
+    assert not climate.valves_open
+
+    freezer.tick(60)
     assert climate.requested_setpoint == 44.4
+    assert climate.valves_open
     assert climate.extra_state_attributes["requested_setpoints"] == {"climate.room_1": 44.4, "climate.room_2": 16.8}
     assert climate.minimum_setpoint._store is not None
 
@@ -231,6 +236,19 @@ async def test_valves_mode(hass: HomeAssistant, entry: MockConfigEntry, climate:
 
     hass.states.async_set("sensor.test_outside_sensor", "unavailable")
     assert climate.current_outside_temperature == 9.9
+
+    hass.states.async_set("climate.room_1", HVACMode.HEAT, {"temperature": 20.0, "current_temperature": 19.3, "hvac_action": "idle", "hvac_modes": [HVACMode.OFF, HVACMode.HEAT]})
+    await hass.async_block_till_done()
+    assert climate.requested_setpoint == MINIMUM_SETPOINT
+    assert not climate.valves_open
+
+    await climate.async_control_heating_loop()
+    assert climate.setpoint == MINIMUM_SETPOINT
+    assert climate._calculated_setpoint is None
+
+    hass.states.async_set("climate.room_1", HVACMode.HEAT, {"temperature": 20.0, "current_temperature": 19.3, "hvac_action": "heating", "hvac_modes": [HVACMode.OFF, HVACMode.HEAT]})
+    await hass.async_block_till_done()
+    assert not climate.valves_open
 
     hass.states.async_set("climate.room_1", HVACMode.OFF, {"current_temperature": 19.3})
     hass.states.async_set("climate.room_2", HVACMode.OFF, {"current_temperature": 17.5})

@@ -530,6 +530,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
     @property
     def valves_open(self) -> bool:
         """Determine if any of the controlled climates have open valves."""
+        if self._heating_mode == HEATING_MODE_VALVES:
+            return self.areas.valves_open
+
         # Get the list of all controlled climates
         climates = self._radiators + self.areas.items()
 
@@ -824,11 +827,11 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         """Control the setpoint of the heating system based on the current mode and PWM state."""
 
         # Check if the system is in HEAT mode
-        if self.hvac_mode != HVACMode.HEAT:
+        if self.hvac_mode != HVACMode.HEAT or (self._heating_mode == HEATING_MODE_VALVES and not self.valves_open):
             # If not in HEAT mode, set to the minimum setpoint
             self._calculated_setpoint = None
             self._setpoint = MINIMUM_SETPOINT
-            _LOGGER.info("HVAC mode is not HEAT. Setting setpoint to minimum: %.1f°C", MINIMUM_SETPOINT)
+            _LOGGER.info("Not heating or no valve open. Setting setpoint to minimum: %.1f°C", MINIMUM_SETPOINT)
 
         elif not self.pulse_width_modulation_enabled or pwm_state.status == PWMStatus.IDLE:
             # Normal cycle without PWM
